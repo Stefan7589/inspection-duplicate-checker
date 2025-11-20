@@ -74,6 +74,13 @@ if st.session_state["batches"]:
     st.subheader("Uploaded Batches:")
     for i, batch in enumerate(st.session_state["batches"], start=1):
         st.write(f"**Batch {i}: {len(batch)} files**")
+# ----------------------------------------------------
+# Show all active uploaded files (stable view)
+# ----------------------------------------------------
+if st.session_state["all_files"]:
+    st.subheader("Current Files Loaded:")
+    for f in st.session_state["all_files"]:
+        st.write(f"- {f.name}")
 
 # ----------------------------------------------------
 # Undo Last Batch — ALWAYS visible
