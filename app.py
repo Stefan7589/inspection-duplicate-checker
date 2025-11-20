@@ -72,8 +72,6 @@ if st.button("▶️ Run Duplicate Check"):
     st.subheader("🔍 Duplicate Photo Groups")
     duplicates = df[df.duplicated("md5", keep=False)].sort_values("md5")
 
-
-
     # NEW: Show the warning message first
     st.error("🚨 We have a problem…")
     st.warning("Duplicate inspection photos detected below:")
@@ -86,5 +84,6 @@ if st.button("▶️ Run Duplicate Check"):
             col.markdown(f"**{row['file']} — Page {row['page']}**")
             col.image(row["image"], use_column_width=True)
 else:
+    
 if duplicates.empty:
     st.success("No duplicate inspection photos detected.")
