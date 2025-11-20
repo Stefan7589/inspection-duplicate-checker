@@ -72,13 +72,19 @@ if st.button("▶️ Run Duplicate Check"):
     st.subheader("🔍 Duplicate Photo Groups")
     duplicates = df[df.duplicated("md5", keep=False)].sort_values("md5")
 
-    if duplicates.empty:
-        st.success("✅ No duplicate inspection photos detected.")
-    else:
-        st.error("⚠️ Duplicate inspection photos found!")
-        for md5_hash, group in duplicates.groupby("md5"):
-            st.markdown(f"### 🟦 Duplicate Set — MD5: `{md5_hash}`")
-            cols = st.columns(len(group))
-            for col, (_, row) in zip(cols, group.iterrows()):
-                col.markdown(f"**{row['file']} — Page {row['page']}**")
-                col.image(row["image"], use_column_width=True)
+
+
+    # NEW: Show the warning message first
+    st.error("🚨 We have a problem…")
+    st.warning("Duplicate inspection photos detected below:")
+
+    # Now display the duplicate groups
+    for md5_hash, group in duplicates.groupby("md5"):
+        st.markdown(f"### 🔁 Duplicate Set — MD5: `{md5_hash}`")
+        cols = st.columns(len(group))
+        for col, (_, row) in zip(cols, group.iterrows()):
+            col.markdown(f"**{row['file']} — Page {row['page']}**")
+            col.image(row["image"], use_column_width=True)
+else:
+if duplicates.empty:
+    st.success("No duplicate inspection photos detected.")
