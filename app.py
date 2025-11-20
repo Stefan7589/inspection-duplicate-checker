@@ -188,20 +188,46 @@ if st.button("Run Duplicate Check"):
     else:
         st.error("🚨 Duplicate inspection photos detected:")
 
-        for md5_hash, group in duplicates.groupby("md5"):
-            st.markdown(f"### Duplicate Set — MD5: `{md5_hash}`")
-            cols = st.columns(len(group))
+           for md5_hash, group in duplicates.groupby("md5"):
 
-            for col, (_, row) in zip(cols, group.iterrows()):
-                col.markdown(f"**{row['file']} — Page {row['page']}**")
+        # Convert PIL → Base64 for the FIRST image only
+        first_row = group.iloc[0]
+        buf = io.BytesIO()
+        first_row["image"].save(buf, format="PNG")
+        img_b64 = base64.b64encode(buf.getvalue()).decode()
 
-                # Convert image to base64 for stable thumbnails
-                buf = io.BytesIO()
-                row["image"].save(buf, format="PNG")
-                img_bytes = buf.getvalue()
+        # CARD HEADER
+        st.markdown(
+            f"""
+            <div style="padding:12px; background:#111; border-radius:6px; margin-top:25px;
+                         border-left:4px solid #4CAF50; font-size:18px;">
+                🔁 <strong>Duplicate Set — MD5:</strong>
+                <span style="color:#4caf50; font-family:monospace;">{md5_hash}</span>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
 
-                col.markdown(
-                    f"<img src='data:image/png;base64,{base64.b64encode(img_bytes).decode()}' "
-                    f"style='width:70%; max-width:250px; border-radius:6px;'>",
-                    unsafe_allow_html=True
-                )
+        # MAIN CARD WITH ONE IMAGE + FILE LIST
+        st.markdown(
+            f"""
+            <div style="
+                border:1px solid #333;
+                border-radius:10px;
+                padding:12px;
+                background-color:#1a1a1a;
+                margin-bottom:20px;
+                box-shadow:0 0 8px rgba(0,0,0,0.35);
+            ">
+                <img src="data:image/png;base64,{img_b64}"
+                     style="width:40%; border-radius:6px; margin:10px auto; display:block;">
+                
+                <div style="font-size:15px; margin-top:10px;">
+                    <strong>📄 Found in:</strong><br>
+                    {''.join([f"• {row['file']} — Page {row['page']}<br>" 
+                              for _, row in group.iterrows()])}
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
