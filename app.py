@@ -12,29 +12,28 @@ import base64
 st.set_page_config(page_title="Inspection Photo Duplicate Checker", layout="wide")
 
 # ----------------------------------------------------
-# ENSURE uploader_key ALWAYS EXISTS
-# (critical for multi-reset support)
+# ALWAYS initialize keys FIRST
 # ----------------------------------------------------
 if "uploader_key" not in st.session_state:
     st.session_state["uploader_key"] = 0
 
+if "batches" not in st.session_state:
+    st.session_state["batches"] = []        # list of batches, each batch is a list of UploadedFile objects
+if "all_files" not in st.session_state:
+    st.session_state["all_files"] = []      # flattened list of all files, in order of upload
+if "run_pressed" not in st.session_state:
+    st.session_state["run_pressed"] = False
+
 # ----------------------------------------------------
-# Reset Button (FINAL WORKING MULTI-RESET LOGIC)
+# Reset Button (MULTI-RESET SAFE)
 # ----------------------------------------------------
 if st.button("Reset App"):
-
-    # 1) Clear ONLY non-system keys (so reset logic survives)
     for key in list(st.session_state.keys()):
         if key not in ["uploader_key"]:
             del st.session_state[key]
 
-    # 2) Rotate uploader key so uploader widget refreshes
     st.session_state["uploader_key"] += 1
-
-    # 3) Force URL param refresh so Streamlit rebuilds widget tree
     st.experimental_set_query_params(_=str(st.session_state["uploader_key"]))
-
-    # 4) Rerun app
     st.rerun()
 
 # ----------------------------------------------------
@@ -42,22 +41,53 @@ if st.button("Reset App"):
 # ----------------------------------------------------
 st.markdown("""
 # Inspection Photo Duplicate Checker  
-Upload PDFs and detect strict binary duplicate photos.
+Upload PDFs in batches and detect strict binary duplicate photos.
 """)
 
 # ----------------------------------------------------
-# File uploader inside container (so it rebuilds properly)
+# Upload area
 # ----------------------------------------------------
-with st.container():
-    uploaded_files = st.file_uploader(
-        "Upload PDF Reports",
-        type=["pdf"],
-        accept_multiple_files=True,
-        key=f"uploader_{st.session_state['uploader_key']}"
-    )
+uploaded_files = st.file_uploader(
+    "Upload PDF Reports (multiple batches allowed)",
+    type=["pdf"],
+    accept_multiple_files=True,
+    key=f"uploader_{st.session_state['uploader_key']}"
+)
 
 # ----------------------------------------------------
-# Extract Inspection Photos
+# If user uploads files, record them as a new batch
+# ----------------------------------------------------
+if uploaded_files:
+    # Detect new files (compared to previously stored full file list)
+    new_files = [f for f in uploaded_files if f not in st.session_state["all_files"]]
+
+    if new_files:
+        st.session_state["batches"].append(new_files)
+        st.session_state["all_files"].extend(new_files)
+
+# ----------------------------------------------------
+# Show batch list (Option A)
+# ----------------------------------------------------
+if st.session_state["batches"]:
+    st.subheader("Uploaded Batches:")
+    for i, batch in enumerate(st.session_state["batches"], start=1):
+        st.write(f"**Batch {i}: {len(batch)} files**")
+        for f in batch:
+            st.write(f"- {f.name}")
+
+# ----------------------------------------------------
+# Undo Last Batch (Option 3: Only visible before RUN)
+# ----------------------------------------------------
+if st.session_state["batches"] and not st.session_state["run_pressed"]:
+    if st.button("Undo Last Batch"):
+        last_batch = st.session_state["batches"].pop()
+        for f in last_batch:
+            if f in st.session_state["all_files"]:
+                st.session_state["all_files"].remove(f)
+        st.rerun()
+
+# ----------------------------------------------------
+# Utility: Extract inspection photos
 # ----------------------------------------------------
 def extract_photos(pdf_name, pdf_bytes):
     output = []
@@ -74,7 +104,7 @@ def extract_photos(pdf_name, pdf_bytes):
             image = Image.open(io.BytesIO(img_bytes))
             w, h = image.size
 
-            # Only real inspection photos
+            # Final extraction threshold (300×150)
             if w >= 300 and h >= 150:
                 md5 = hashlib.md5(img_bytes).hexdigest()
                 output.append({
@@ -87,53 +117,57 @@ def extract_photos(pdf_name, pdf_bytes):
     return output
 
 # ----------------------------------------------------
-# Run Duplicate Check
+# RUN
 # ----------------------------------------------------
 if st.button("Run Duplicate Check"):
+    st.session_state["run_pressed"] = True
 
-    if not uploaded_files:
+    # Stop if no files
+    if not st.session_state["all_files"]:
         st.error("Please upload PDF files first.")
         st.stop()
 
-    # -------------------------------------------
-    # Check for duplicate filenames in upload list
-    # -------------------------------------------
-    filenames = [f.name for f in uploaded_files]
+    # Detect duplicate filenames BEFORE processing
+    filenames = [f.name for f in st.session_state["all_files"]]
     duplicates_by_name = set([x for x in filenames if filenames.count(x) > 1])
 
     if duplicates_by_name:
         st.error("⚠️ Duplicate PDF filenames detected!")
         st.warning(
-            "The following files appear more than once:\n\n" +
+            "You uploaded one or more PDF files more than once:\n\n" +
             "\n".join(f"- **{name}**" for name in duplicates_by_name) +
-            "\n\nPlease re-upload your batch without duplicates."
+            "\n\nPlease remove duplicates using Undo or Reset, then re-upload."
         )
         st.stop()
 
-
-    # Temporary status message
+    # Extraction progress
     status = st.empty()
     status.info("Extracting inspection photos…")
 
     all_records = []
     progress = st.progress(0)
 
-    for i, pdf in enumerate(uploaded_files):
+    for i, pdf in enumerate(st.session_state["all_files"]):
         pdf_bytes = pdf.read()
         all_records.extend(extract_photos(pdf.name, pdf_bytes))
-        progress.progress((i + 1) / len(uploaded_files))
+        progress.progress((i + 1) / len(st.session_state["all_files"]))
 
-    status.empty()  # remove loading message
+    status.empty()
 
     df = pd.DataFrame(all_records)
 
-    # Duplicate detection
+    # Safety check
+    if df.empty or "md5" not in df.columns:
+        st.warning("⚠️ No valid inspection photos found in the uploaded PDFs.")
+        st.stop()
+
+    # Perform duplicate detection
     duplicates = df[df.duplicated("md5", keep=False)].sort_values("md5")
 
     st.subheader("Duplicate Photo Results")
 
     if duplicates.empty:
-        st.success("No duplicate inspection photos detected.")
+        st.success("✅ Good to go! No duplicate inspection photos detected.")
     else:
         st.error("Duplicate inspection photos detected:")
 
@@ -145,15 +179,13 @@ if st.button("Run Duplicate Check"):
             for col, (_, row) in zip(cols, group.iterrows()):
                 col.markdown(f"**{row['file']} — Page {row['page']}**")
 
-                # Convert PIL image -> base64 for stable small thumbnails
+                # Convert image → base64 for stable thumbnail
                 buf = io.BytesIO()
                 row["image"].save(buf, format="PNG")
                 img_bytes = buf.getvalue()
 
-                # Show smaller image without breaking reset
                 col.markdown(
-    f"<img src='data:image/png;base64,{base64.b64encode(img_bytes).decode()}' "
-    f"style='width: 70%; max-width: 250px; border-radius: 6px;'>",
-    unsafe_allow_html=True
-)
-
+                    f"<img src='data:image/png;base64,{base64.b64encode(img_bytes).decode()}' "
+                    f"style='width: 70%; max-width: 250px; border-radius: 6px;'>",
+                    unsafe_allow_html=True
+                )
