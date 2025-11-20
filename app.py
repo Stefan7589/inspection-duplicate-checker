@@ -16,7 +16,8 @@ st.set_page_config(page_title="Inspection Photo Duplicate Checker", layout="wide
 if st.button("Reset App"):
     st.session_state.clear()                   # Clear session
     st.session_state["force_reload"] = True    # Flag to force rebuild
-    st.experimental_rerun()                    # Restart the app
+    st.rerun()
+                   # Restart the app
 
 # ----------------------------------------------------
 # Title
