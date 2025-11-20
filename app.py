@@ -11,16 +11,13 @@ import pandas as pd
 st.set_page_config(page_title="Inspection Photo Duplicate Checker", layout="wide")
 
 # ----------------------------------------------------
-# Proper Reset Button
-# ----------------------------------------------------
-# ----------------------------------------------------
-# Reset Button (FINAL working version)
+# Reset Button (FINAL WORKING VERSION)
 # ----------------------------------------------------
 if st.button("Reset App"):
-    st.session_state.clear()  # 1) Clear state
-    st.session_state["uploader_key"] = st.session_state.get("uploader_key", 0) + 1  # 2) Change key
-    st.experimental_set_query_params(_=str(st.session_state["uploader_key"]))  # 3) Force new session
-    st.rerun()
+    st.session_state.clear()  # 1) clear session state
+    st.session_state["uploader_key"] = st.session_state.get("uploader_key", 0) + 1  # 2) rotate uploader key
+    st.experimental_set_query_params(_=str(st.session_state["uploader_key"]))  # 3) force new session
+    st.rerun()  # restart app
 
 # ----------------------------------------------------
 # Title
@@ -31,15 +28,10 @@ Upload PDFs and detect strict binary duplicate photos.
 """)
 
 # ----------------------------------------------------
-# Handle uploader reset
+# Uploader Key
 # ----------------------------------------------------
 if "uploader_key" not in st.session_state:
     st.session_state["uploader_key"] = 0
-
-# If reset happened, rotate the uploader key
-if st.session_state.get("force_reload", False):
-    st.session_state["uploader_key"] += 1
-    st.session_state["force_reload"] = False
 
 # ----------------------------------------------------
 # File Uploader (this WILL fully reset now)
@@ -52,7 +44,7 @@ uploaded_files = st.file_uploader(
 )
 
 # ----------------------------------------------------
-# Extract inspection photos
+# Extract Inspection Photos
 # ----------------------------------------------------
 def extract_photos(pdf_name, pdf_bytes):
     output = []
@@ -90,6 +82,7 @@ if st.button("Run Duplicate Check"):
         st.error("Please upload PDF files first.")
         st.stop()
 
+    # Temporary status message (disappears later)
     status = st.empty()
     status.info("Extracting inspection photos…")
 
@@ -101,10 +94,12 @@ if st.button("Run Duplicate Check"):
         all_records.extend(extract_photos(pdf.name, pdf_bytes))
         progress.progress((i + 1) / len(uploaded_files))
 
+    # Remove status message
     status.empty()
 
     df = pd.DataFrame(all_records)
 
+    # Duplicate detection
     duplicates = df[df.duplicated("md5", keep=False)].sort_values("md5")
 
     st.subheader("Duplicate Photo Results")
