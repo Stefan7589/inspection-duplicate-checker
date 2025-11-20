@@ -88,7 +88,6 @@ if st.session_state["batches"]:
 
         st.session_state["run_pressed"] = False
         st.session_state["uploader_key"] += 1
-
         st.rerun()
 
 # ----------------------------------------------------
@@ -167,8 +166,15 @@ if st.button("Run Duplicate Check"):
 
     st.subheader("Duplicate Photo Results")
 
+    # ----------------------------------------
+    # GOOD TO GO — NO DUPLICATES
+    # ----------------------------------------
     if duplicates.empty:
         st.success("✅ Good to go! No duplicate inspection photos detected.")
+
+    # ----------------------------------------
+    # DUPLICATES FOUND — DISPLAY CARDS
+    # ----------------------------------------
     else:
         st.error("🚨 Duplicate inspection photos detected:")
 
