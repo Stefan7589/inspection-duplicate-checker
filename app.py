@@ -16,7 +16,9 @@ st.set_page_config(page_title="Inspection Photo Duplicate Checker", layout="wide
 if st.button("Reset App"):
     st.session_state.clear()
     st.session_state["uploader_key"] = st.session_state.get("uploader_key", 0) + 1
+    st.experimental_set_query_params(reset=str(st.session_state["uploader_key"]))
     st.rerun()
+
 
 # ----------------------------------------------------
 # Title
