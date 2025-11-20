@@ -6,6 +6,11 @@ from PIL import Image
 import io
 import pandas as pd
 
+# Reset / Clear all button
+if st.button("🔄 Reset App"):
+    st.session_state.clear()
+    st.experimental_rerun()
+
 st.set_page_config(page_title="Inspection Photo Duplicate Checker", layout="wide")
 
 st.markdown("""# 🟩 Inspection Photo Duplicate Checker  
