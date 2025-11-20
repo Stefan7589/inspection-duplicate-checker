@@ -13,11 +13,14 @@ st.set_page_config(page_title="Inspection Photo Duplicate Checker", layout="wide
 # ----------------------------------------------------
 # Proper Reset Button
 # ----------------------------------------------------
+# ----------------------------------------------------
+# Reset Button (FINAL working version)
+# ----------------------------------------------------
 if st.button("Reset App"):
-    st.session_state.clear()                   # Clear session
-    st.session_state["force_reload"] = True    # Flag to force rebuild
+    st.session_state.clear()  # 1) Clear state
+    st.session_state["uploader_key"] = st.session_state.get("uploader_key", 0) + 1  # 2) Change key
+    st.experimental_set_query_params(_=str(st.session_state["uploader_key"]))  # 3) Force new session
     st.rerun()
-                   # Restart the app
 
 # ----------------------------------------------------
 # Title
