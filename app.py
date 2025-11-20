@@ -5,25 +5,30 @@ from PIL import Image
 import io
 import pandas as pd
 
-# -----------------------------------
+# ------------------------------
+# App configuration
+# ------------------------------
+st.set_page_config(page_title="Inspection Photo Duplicate Checker", layout="wide")
+
+# ------------------------------
 # Reset App Button
-# -----------------------------------
+# ------------------------------
 if st.button("Reset App"):
     st.session_state.clear()
     st.session_state["uploader_key"] = st.session_state.get("uploader_key", 0) + 1
     st.rerun()
 
-st.set_page_config(page_title="Inspection Photo Duplicate Checker", layout="wide")
-
+# ------------------------------
 # Title + description
+# ------------------------------
 st.markdown("""
 # Inspection Photo Duplicate Checker  
 Upload PDFs and detect strict binary duplicate photos.
 """)
 
-# -----------------------------------
+# ------------------------------
 # File Uploader with Reset Support
-# -----------------------------------
+# ------------------------------
 if "uploader_key" not in st.session_state:
     st.session_state["uploader_key"] = 0
 
@@ -34,14 +39,16 @@ uploaded_files = st.file_uploader(
     key=st.session_state["uploader_key"]
 )
 
-# -----------------------------------
+# ------------------------------
 # Photo Extraction Function
-# -----------------------------------
+# ------------------------------
 def extract_photos(pdf_name, pdf_bytes):
     doc = fitz.open(stream=pdf_bytes, filetype="pdf")
     output = []
+
     for page_index in range(len(doc)):
         page = doc[page_index]
+
         for img_index, img in enumerate(page.get_images(full=True)):
             xref = img[0]
             base_img = doc.extract_image(xref)
@@ -58,24 +65,32 @@ def extract_photos(pdf_name, pdf_bytes):
                     "md5": md5,
                     "image": image
                 })
+
     return output
 
-# -----------------------------------
+# ------------------------------
 # Run Duplicate Check
-# -----------------------------------
+# ------------------------------
 if st.button("Run Duplicate Check"):
 
     if not uploaded_files:
         st.error("Please upload PDF files first.")
         st.stop()
 
-    st.info("Extracting inspection photos…")
-    all_records = []
+    # Live status message (clears after extraction)
+    status = st.empty()
+    status.info("Extracting inspection photos…")
 
+    all_records = []
     progress = st.progress(0)
+
     for i, pdf in enumerate(uploaded_files):
-        all_records.extend(extract_photos(pdf.name, pdf.read()))
+        pdf_bytes = pdf.read()
+        all_records.extend(extract_photos(pdf.name, pdf_bytes))
         progress.progress((i + 1) / len(uploaded_files))
+
+    # Remove the status message
+    status.empty()
 
     df = pd.DataFrame(all_records)
 
@@ -89,10 +104,10 @@ if st.button("Run Duplicate Check"):
     else:
         st.warning("Duplicate inspection photos detected:")
 
-        # Show groups
         for md5_hash, group in duplicates.groupby("md5"):
             st.markdown(f"### Duplicate Set — MD5: `{md5_hash}`")
             cols = st.columns(len(group))
+
             for col, (_, row) in zip(cols, group.iterrows()):
                 col.markdown(f"**{row['file']} — Page {row['page']}**")
                 col.image(row["image"], use_column_width=True)
