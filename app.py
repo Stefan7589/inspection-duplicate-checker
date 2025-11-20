@@ -75,7 +75,7 @@ def extract_photos(pdf_name, pdf_bytes):
             w, h = image.size
 
             # Only real inspection photos
-            if w >= 200 and h >= 200:
+            if w >= 300 and h >= 150:
                 md5 = hashlib.md5(img_bytes).hexdigest()
                 output.append({
                     "file": pdf_name,
