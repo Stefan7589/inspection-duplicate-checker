@@ -112,4 +112,5 @@ if st.button("Run Duplicate Check"):
             cols = st.columns(len(group))
             for col, (_, row) in zip(cols, group.iterrows()):
                 col.markdown(f"**{row['file']} — Page {row['page']}**")
-                col.image(row["image"], use_column_width=50)
+                col.image(row["image"], width=50)
+
