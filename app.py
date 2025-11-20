@@ -136,7 +136,8 @@ if st.button("Run Duplicate Check"):
 
                 # Show smaller image without breaking reset
                 col.markdown(
-                    f"<img src='data:image/png;base64,{base64.b64encode(img_bytes).decode()}' "
-                    f"style='width: 50%; max-width: 200px; border-radius: 6px;'>",
-                    unsafe_allow_html=True
-                )
+    f"<img src='data:image/png;base64,{base64.b64encode(img_bytes).decode()}' "
+    f"style='width: 70%; max-width: 250px; border-radius: 6px;'>",
+    unsafe_allow_html=True
+)
+
