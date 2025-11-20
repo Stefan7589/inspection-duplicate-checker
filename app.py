@@ -164,78 +164,64 @@ if st.button("Run Duplicate Check"):
         st.success("✅ Good to go! No duplicate inspection photos detected.")
     else:
         st.error("🚨 Duplicate inspection photos detected:")
+# ---------------- CSS ----------------
+st.markdown("""
+<style>
+    .dup-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+        gap: 20px;
+        margin-top: 25px;
+    }
+    .dup-card {
+        background: #1f1f1f;
+        border: 1px solid #333;
+        border-radius: 10px;
+        padding: 12px;
+        box-shadow: 0 0 8px rgba(0,0,0,0.5);
+    }
+    .dup-img {
+        width: 100%;
+        border-radius: 6px;
+    }
+    .dup-files {
+        font-size: 13px;
+        color: #ddd;
+        margin-top: 10px;
+        margin-bottom: 10px;
+        line-height: 1.3;
+    }
+    .dup-title {
+        text-align: center;
+        font-family: monospace;
+        color: #4caf50;
+        margin-bottom: 8px;
+    }
+</style>
+""", unsafe_allow_html=True)
 
-        # ------------------------------------------------------------
-        # CSS for card layout
-        # ------------------------------------------------------------
-        st.markdown("""
-        <style>
-            .dup-grid {
-                display: grid;
-                grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-                gap: 18px;
-                margin-top: 25px;
-            }
-            .dup-card {
-                background: #1e1e1e;
-                padding: 15px;
-                border-radius: 10px;
-                border: 1px solid #333;
-                box-shadow: 0 0 10px rgba(0,0,0,0.4);
-            }
-            .dup-title {
-                font-size: 15px;
-                color: #4CAF50;
-                font-family: monospace;
-                margin-bottom: 10px;
-                text-align: center;
-            }
-            .dup-img {
-                width: 100%;
-                border-radius: 6px;
-                margin-top: 8px;
-            }
-            .dup-files {
-                font-size: 13px;
-                color: #ddd;
-                margin-bottom: 8px;
-                line-height: 1.3;
-            }
-        </style>
-        """, unsafe_allow_html=True)
+# ---------------- START GRID ----------------
+st.markdown("<div class='dup-grid'>", unsafe_allow_html=True)
 
-        # Start Grid
-        st.markdown("<div class='dup-grid'>", unsafe_allow_html=True)
+for md5_hash, group in duplicates.groupby("md5"):
 
-        # Loop groups
-        for md5_hash, group in duplicates.groupby("md5"):
+    # Convert 1 image to base64
+    first_row = group.iloc[0]
+    buffer = io.BytesIO()
+    first_row["image"].save(buffer, format="PNG")
+    img_b64 = base64.b64encode(buffer.getvalue()).decode()
 
-            # Convert first image from group
-            first_row = group.iloc[0]
-            buf = io.BytesIO()
-            first_row["image"].save(buf, format="PNG")
-            img_b64 = base64.b64encode(buf.getvalue()).decode()
+    # File list
+    files_html = "".join(
+        f"• {row['file']} — Page {row['page']}<br>"
+        for _, row in group.iterrows()
+    )
 
-            # File list
-            file_list_html = "".join(
-                f"• {row['file']} — Page {row['page']}<br>"
-                for _, row in group.iterrows()
-            )
-
-            card_html = f"""
-            <div class="dup-card">
-                <div class="dup-title">MD5: {md5_hash}</div>
-
-                <div class="dup-files">
-                    <strong>📄 Found in:</strong><br>
-                    {file_list_html}
-                </div>
-
-                <img class="dup-img" src="data:image/png;base64,{img_b64}">
-            </div>
-            """
-
-            st.markdown(card_html, unsafe_allow_html=True)
-
-        # End Grid
-        st.markdown("</div>", unsafe_allow_html=True)
+    # CARD HTML
+    card_html = f"""
+    <div class="dup-card">
+        <div class="dup-title">MD5: {md5_hash}</div>
+        
+        <div class="dup-files">
+            <strong>📄 Found in:</strong><br>
+            {file
