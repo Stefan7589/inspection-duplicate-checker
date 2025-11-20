@@ -11,15 +11,19 @@ import pandas as pd
 st.set_page_config(page_title="Inspection Photo Duplicate Checker", layout="wide")
 
 # ----------------------------------------------------
-# Reset Logic (Container-Based Reset)
+# ALWAYS initialize keys FIRST (prevents KeyError)
 # ----------------------------------------------------
-if "uploader_container_key" not in st.session_state:
-    st.session_state["uploader_container_key"] = 0
+if "uploader_key" not in st.session_state:
+    st.session_state["uploader_key"] = 0
 
+# ----------------------------------------------------
+# Reset Button (the original WORKING 3-step fix)
+# ----------------------------------------------------
 if st.button("Reset App"):
-    st.session_state.clear()  # Clear all state
-    st.session_state["uploader_container_key"] += 1  # Force new container
-    st.rerun()
+    st.session_state.clear()  # 1) clear all state
+    st.session_state["uploader_key"] = st.session_state.get("uploader_key", 0) + 1  # 2) rotate key
+    st.experimental_set_query_params(_=str(st.session_state["uploader_key"]))  # 3) force new session
+    st.rerun()  # restart the app
 
 # ----------------------------------------------------
 # Title
@@ -30,16 +34,14 @@ Upload PDFs and detect strict binary duplicate photos.
 """)
 
 # ----------------------------------------------------
-# Dynamic Container for File Uploader (THIS FIXES THE PROBLEM)
+# File uploader inside a container (forces regeneration)
 # ----------------------------------------------------
-uploader_container = st.container()
-
-with uploader_container:
+with st.container():
     uploaded_files = st.file_uploader(
         "Upload PDF Reports",
         type=["pdf"],
         accept_multiple_files=True,
-        key=f"uploader_{st.session_state['uploader_container_key']}"
+        key=f"uploader_{st.session_state['uploader_key']}"
     )
 
 # ----------------------------------------------------
