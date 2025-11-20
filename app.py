@@ -102,7 +102,7 @@ if st.button("Run Duplicate Check"):
     if duplicates.empty:
         st.success("No duplicate inspection photos detected.")
     else:
-        st.warning("Duplicate inspection photos detected:")
+        st.error("Duplicate inspection photos detected:")
 
         for md5_hash, group in duplicates.groupby("md5"):
             st.markdown(f"### Duplicate Set — MD5: `{md5_hash}`")
