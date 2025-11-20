@@ -6,13 +6,13 @@ from PIL import Image
 import io
 import pandas as pd
 
-if st.button("🔄 Reset App"):
+if st.button("Reset"):
     st.session_state.clear()
     st.rerun()
 
 st.set_page_config(page_title="Inspection Photo Duplicate Checker", layout="wide")
 
-st.markdown("""# 🟩 Inspection Photo Duplicate Checker  
+st.markdown("""# Inspection Photo Duplicate Checker  
 Upload PDFs and detect strict binary duplicate photos.  
 """)
 
