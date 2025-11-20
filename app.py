@@ -76,15 +76,26 @@ if st.session_state["batches"]:
         st.write(f"**Batch {i}: {len(batch)} files**")
 
 # ----------------------------------------------------
-# Undo Last Batch — only before running
+# Undo Last Batch — ALWAYS visible
 # ----------------------------------------------------
-if st.session_state["batches"] and not st.session_state["run_pressed"]:
+if st.session_state["batches"]:
     if st.button("Undo Last Batch"):
+
+        # Remove last batch
         last_batch = st.session_state["batches"].pop()
+
         for f in last_batch:
             if f in st.session_state["all_files"]:
                 st.session_state["all_files"].remove(f)
+
+        # Allow running again
+        st.session_state["run_pressed"] = False
+
+        # Force uploader to refresh so removed files disappear visually
+        st.session_state["uploader_key"] += 1
+
         st.rerun()
+
 
 # ----------------------------------------------------
 # Extract Inspection Photos
