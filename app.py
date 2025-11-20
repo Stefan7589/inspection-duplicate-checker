@@ -6,8 +6,9 @@ from PIL import Image
 import io
 import pandas as pd
 
-if st.button("Reset"):
+if st.button("Reset App"):
     st.session_state.clear()
+    st.session_state["uploader_key"] = st.session_state.get("uploader_key", 0) + 1
     st.rerun()
 
 st.set_page_config(page_title="Inspection Photo Duplicate Checker", layout="wide")
@@ -16,10 +17,14 @@ st.markdown("""# Inspection Photo Duplicate Checker
 Upload PDFs and detect strict binary duplicate photos.  
 """)
 
+if "uploader_key" not in st.session_state:
+    st.session_state["uploader_key"] = 0
+
 uploaded_files = st.file_uploader(
-    "📤 Upload PDF Reports",
+    "Upload PDF Reports",
     type=["pdf"],
-    accept_multiple_files=True
+    accept_multiple_files=True,
+    key=st.session_state["uploader_key"]
 )
 
 def extract_photos(pdf_name, pdf_bytes):
