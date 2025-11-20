@@ -23,11 +23,8 @@ if "batches" not in st.session_state:
 if "all_files" not in st.session_state:
     st.session_state["all_files"] = []  # flattened list of all uploaded files
 
-if "run_pressed" not in st.session_state:
-    st.session_state["run_pressed"] = False
-
 # ----------------------------------------------------
-# Reset Button (infinite resets, always clean)
+# Reset Button (fully reliable)
 # ----------------------------------------------------
 if st.button("Reset App"):
     for key in list(st.session_state.keys()):
@@ -47,7 +44,7 @@ Upload PDFs in batches and detect strict binary duplicate photos.
 """)
 
 # ----------------------------------------------------
-# File uploader (multi-batch capable)
+# File uploader (multi-batch)
 # ----------------------------------------------------
 uploaded_files = st.file_uploader(
     "Upload PDF Reports (multiple batches allowed)",
@@ -75,7 +72,7 @@ if st.session_state["batches"]:
         st.write(f"**Batch {i}: {len(batch)} files**")
 
 # ----------------------------------------------------
-# Undo Last Batch — ALWAYS visible
+# Undo Last Batch
 # ----------------------------------------------------
 if st.session_state["batches"]:
     if st.button("Undo Last Batch"):
@@ -86,7 +83,6 @@ if st.session_state["batches"]:
             if f in st.session_state["all_files"]:
                 st.session_state["all_files"].remove(f)
 
-        st.session_state["run_pressed"] = False
         st.session_state["uploader_key"] += 1
         st.rerun()
 
@@ -108,7 +104,7 @@ def extract_photos(pdf_name, pdf_bytes):
             image = Image.open(io.BytesIO(img_bytes))
             w, h = image.size
 
-            # UNIVERSAL WORKING THRESHOLD
+            # Universal threshold
             if w >= 300 and h >= 150:
                 md5 = hashlib.md5(img_bytes).hexdigest()
                 output.append({
@@ -124,7 +120,6 @@ def extract_photos(pdf_name, pdf_bytes):
 # Run Duplicate Check
 # ----------------------------------------------------
 if st.button("Run Duplicate Check"):
-    st.session_state["run_pressed"] = True
 
     if not st.session_state["all_files"]:
         st.error("Please upload files first.")
@@ -143,7 +138,7 @@ if st.button("Run Duplicate Check"):
         )
         st.stop()
 
-    # Extraction
+    # Extraction progress
     status = st.empty()
     status.info("Extracting inspection photos…")
     all_records = []
@@ -166,58 +161,76 @@ if st.button("Run Duplicate Check"):
 
     st.subheader("Duplicate Photo Results")
 
-    # ----------------------------------------
-    # GOOD TO GO — NO DUPLICATES
-    # ----------------------------------------
     if duplicates.empty:
         st.success("✅ Good to go! No duplicate inspection photos detected.")
-
-    # ----------------------------------------
-    # DUPLICATES FOUND — DISPLAY CARDS
-    # ----------------------------------------
     else:
         st.error("🚨 Duplicate inspection photos detected:")
 
+        # ------------------------------------------------------------
+        # GRID CARD CSS
+        # ------------------------------------------------------------
+        st.markdown("""
+        <style>
+            .dup-grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+                gap: 20px;
+                margin-top: 20px;
+            }
+            .dup-card {
+                background: #1a1a1a;
+                padding: 15px;
+                border-radius: 10px;
+                border: 1px solid #333;
+                box-shadow: 0 0 8px rgba(0,0,0,0.35);
+            }
+            .dup-title {
+                font-size: 14px;
+                color: #4caf50;
+                margin-bottom: 10px;
+                font-family: monospace;
+            }
+            .dup-img {
+                width: 100%;
+                border-radius: 6px;
+                margin-bottom: 8px;
+            }
+            .dup-files {
+                font-size: 13px;
+                line-height: 1.3;
+            }
+        </style>
+        """, unsafe_allow_html=True)
+
+        # ------------------------------------------------------------
+        # GRID START
+        # ------------------------------------------------------------
+        st.markdown("<div class='dup-grid'>", unsafe_allow_html=True)
+
         for md5_hash, group in duplicates.groupby("md5"):
 
-            # Convert the FIRST image to base64 (display a single image)
+            # Convert first image to Base64
             first_row = group.iloc[0]
             buf = io.BytesIO()
             first_row["image"].save(buf, format="PNG")
             img_b64 = base64.b64encode(buf.getvalue()).decode()
 
-            # CARD HEADER
-            st.markdown(
-                f"""
-                <div style="padding:12px; background:#111; border-radius:6px; margin-top:25px;
-                             border-left:4px solid #4CAF50; font-size:18px;">
-                    🔁 <strong>Duplicate Set — MD5:</strong>
-                    <span style="color:#4caf50; font-family:monospace;">{md5_hash}</span>
-                </div>
-                """,
-                unsafe_allow_html=True
-            )
+            # Build card
+            st.markdown(f"""
+            <div class="dup-card">
+                <div class="dup-title">MD5: {md5_hash}</div>
 
-            # CARD BODY
-            st.markdown(
-                f"""
-                <div style="
-                    border:1px solid #333;
-                    border-radius:10px;
-                    padding:12px;
-                    background-color:#1a1a1a;
-                    margin-bottom:20px;
-                    box-shadow:0 0 8px rgba(0,0,0,0.35);
-                ">
-                    <img src="data:image/png;base64,{img_b64}"
-                         style="width:40%; border-radius:6px; margin:10px auto; display:block;">
-                    
-                    <div style="font-size:15px; margin-top:10px;">
-                        <strong>📄 Found in:</strong><br>
-                        {''.join([f"• {row['file']} — Page {row['page']}<br>"
-                                  for _, row in group.iterrows()])}
-                    </div>
+                <img class="dup-img" src="data:image/png;base64,{img_b64}">
+
+                <div class="dup-files">
+                    <strong>📄 Found in:</strong><br>
+                    {''.join([f"• {row['file']} — Page {row['page']}<br>" 
+                              for _, row in group.iterrows()])}
                 </div>
-                """,
-                unsafe_allow_html=True
-            )
+            </div>
+            """, unsafe_allow_html=True)
+
+        # ------------------------------------------------------------
+        # GRID END
+        # ------------------------------------------------------------
+        st.markdown("</div>", unsafe_allow_html=True)
