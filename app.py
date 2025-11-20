@@ -15,8 +15,10 @@ if st.button("Reset App"):
 
 st.set_page_config(page_title="Inspection Photo Duplicate Checker", layout="wide")
 
-st.markdown("""# Inspection Photo Duplicate Checker  
-Upload PDFs and detect strict binary duplicate photos.  
+# Title + description
+st.markdown("""
+# Inspection Photo Duplicate Checker  
+Upload PDFs and detect strict binary duplicate photos.
 """)
 
 # -----------------------------------
@@ -61,12 +63,12 @@ def extract_photos(pdf_name, pdf_bytes):
     return output
 
 # -----------------------------------
-# RUN BUTTON
+# Run Duplicate Check
 # -----------------------------------
 if st.button("Run Duplicate Check"):
 
     if not uploaded_files:
-        st.error("Please upload files first.")
+        st.error("Please upload PDF files first.")
         st.stop()
 
     st.info("Extracting inspection photos…")
@@ -79,25 +81,23 @@ if st.button("Run Duplicate Check"):
 
     df = pd.DataFrame(all_records)
 
-    st.subheader("📸 Extracted Inspection Photos")
+    st.subheader("Extracted Inspection Photos")
     st.write(df[["file", "page", "width", "height", "md5"]])
 
-    # -----------------------------------
-    # Duplicate Detection
-    # -----------------------------------
+    # Duplicate detection
     duplicates = df[df.duplicated("md5", keep=False)].sort_values("md5")
 
-    st.subheader("🔍 Duplicate Photo Groups")
+    st.subheader("Duplicate Photo Groups")
 
     if duplicates.empty:
         st.success("No duplicate inspection photos detected.")
     else:
-        # Your new behavior:
-        st.error("🚨 We have a problem…")
-        st.warning("Duplicate inspection photos detected below:")
+        # FIRST message shown
+        st.warning("Duplicate inspection photos detected:")
 
+        # Then show groups
         for md5_hash, group in duplicates.groupby("md5"):
-            st.markdown(f"### 🔁 Duplicate Set — MD5: `{md5_hash}`")
+            st.markdown(f"### Duplicate Set — MD5: `{md5_hash}`")
             cols = st.columns(len(group))
             for col, (_, row) in zip(cols, group.iterrows()):
                 col.markdown(f"**{row['file']} — Page {row['page']}**")
