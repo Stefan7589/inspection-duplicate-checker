@@ -1,4 +1,3 @@
-
 import streamlit as st
 import fitz
 import hashlib
@@ -6,6 +5,9 @@ from PIL import Image
 import io
 import pandas as pd
 
+# -----------------------------------
+# Reset App Button
+# -----------------------------------
 if st.button("Reset App"):
     st.session_state.clear()
     st.session_state["uploader_key"] = st.session_state.get("uploader_key", 0) + 1
@@ -17,6 +19,9 @@ st.markdown("""# Inspection Photo Duplicate Checker
 Upload PDFs and detect strict binary duplicate photos.  
 """)
 
+# -----------------------------------
+# File Uploader with Reset Support
+# -----------------------------------
 if "uploader_key" not in st.session_state:
     st.session_state["uploader_key"] = 0
 
@@ -27,6 +32,9 @@ uploaded_files = st.file_uploader(
     key=st.session_state["uploader_key"]
 )
 
+# -----------------------------------
+# Photo Extraction Function
+# -----------------------------------
 def extract_photos(pdf_name, pdf_bytes):
     doc = fitz.open(stream=pdf_bytes, filetype="pdf")
     output = []
@@ -38,7 +46,8 @@ def extract_photos(pdf_name, pdf_bytes):
             img_bytes = base_img["image"]
             image = Image.open(io.BytesIO(img_bytes))
             w, h = image.size
-            # Filter real inspection photos
+
+            # Only real inspection photos
             if w >= 650 and h >= 450:
                 md5 = hashlib.md5(img_bytes).hexdigest()
                 output.append({
@@ -51,7 +60,11 @@ def extract_photos(pdf_name, pdf_bytes):
                 })
     return output
 
-if st.button("▶️ Run Duplicate Check"):
+# -----------------------------------
+# RUN BUTTON
+# -----------------------------------
+if st.button("Run Duplicate Check"):
+
     if not uploaded_files:
         st.error("Please upload files first.")
         st.stop()
@@ -69,21 +82,23 @@ if st.button("▶️ Run Duplicate Check"):
     st.subheader("📸 Extracted Inspection Photos")
     st.write(df[["file", "page", "width", "height", "md5"]])
 
-    st.subheader("🔍 Duplicate Photo Groups")
+    # -----------------------------------
+    # Duplicate Detection
+    # -----------------------------------
     duplicates = df[df.duplicated("md5", keep=False)].sort_values("md5")
 
-    # NEW: Show the warning message first
-    st.error("🚨 We have a problem…")
-    st.warning("Duplicate inspection photos detected below:")
+    st.subheader("🔍 Duplicate Photo Groups")
 
-    # Now display the duplicate groups
-    for md5_hash, group in duplicates.groupby("md5"):
-        st.markdown(f"### 🔁 Duplicate Set — MD5: `{md5_hash}`")
-        cols = st.columns(len(group))
-        for col, (_, row) in zip(cols, group.iterrows()):
-            col.markdown(f"**{row['file']} — Page {row['page']}**")
-            col.image(row["image"], use_column_width=True)
-else:
-    
-if duplicates.empty:
-    st.success("No duplicate inspection photos detected.")
+    if duplicates.empty:
+        st.success("No duplicate inspection photos detected.")
+    else:
+        # Your new behavior:
+        st.error("🚨 We have a problem…")
+        st.warning("Duplicate inspection photos detected below:")
+
+        for md5_hash, group in duplicates.groupby("md5"):
+            st.markdown(f"### 🔁 Duplicate Set — MD5: `{md5_hash}`")
+            cols = st.columns(len(group))
+            for col, (_, row) in zip(cols, group.iterrows()):
+                col.markdown(f"**{row['file']} — Page {row['page']}**")
+                col.image(row["image"], use_column_width=True)
