@@ -12,19 +12,19 @@ import base64
 st.set_page_config(page_title="Inspection Photo Duplicate Checker", layout="wide")
 
 # ----------------------------------------------------
-# Initialize all required session keys
+# Initialize session keys safely
 # ----------------------------------------------------
 if "uploader_key" not in st.session_state:
     st.session_state["uploader_key"] = 0
 
 if "batches" not in st.session_state:
-    st.session_state["batches"] = []  # list of batches (each batch is a list of files)
+    st.session_state["batches"] = []
 
 if "all_files" not in st.session_state:
-    st.session_state["all_files"] = []  # flattened list of all uploaded files
+    st.session_state["all_files"] = []
 
 # ----------------------------------------------------
-# Reset Button (fully reliable)
+# Reset Button (FULL, infinite-reset safe)
 # ----------------------------------------------------
 if st.button("Reset App"):
     for key in list(st.session_state.keys()):
@@ -54,7 +54,7 @@ uploaded_files = st.file_uploader(
 )
 
 # ----------------------------------------------------
-# Detect new batch of uploaded files
+# Detect new batch
 # ----------------------------------------------------
 if uploaded_files:
     new_files = [f for f in uploaded_files if f not in st.session_state["all_files"]]
@@ -64,7 +64,7 @@ if uploaded_files:
         st.session_state["all_files"].extend(new_files)
 
 # ----------------------------------------------------
-# Display batch summary
+# Show upload summary
 # ----------------------------------------------------
 if st.session_state["batches"]:
     st.subheader("Uploaded Batches:")
@@ -72,7 +72,7 @@ if st.session_state["batches"]:
         st.write(f"**Batch {i}: {len(batch)} files**")
 
 # ----------------------------------------------------
-# Undo Last Batch
+# Undo last batch
 # ----------------------------------------------------
 if st.session_state["batches"]:
     if st.button("Undo Last Batch"):
@@ -104,7 +104,7 @@ def extract_photos(pdf_name, pdf_bytes):
             image = Image.open(io.BytesIO(img_bytes))
             w, h = image.size
 
-            # Universal threshold
+            # Universal working threshold
             if w >= 300 and h >= 150:
                 md5 = hashlib.md5(img_bytes).hexdigest()
                 output.append({
@@ -125,7 +125,7 @@ if st.button("Run Duplicate Check"):
         st.error("Please upload files first.")
         st.stop()
 
-    # Duplicate filename detection
+    # Warn if same PDF name was uploaded twice
     filenames = [f.name for f in st.session_state["all_files"]]
     duplicates_by_name = {x for x in filenames if filenames.count(x) > 1}
 
@@ -138,21 +138,28 @@ if st.button("Run Duplicate Check"):
         )
         st.stop()
 
-    # Extraction progress
+    # ------------------------------------------------
+    # FIX: Cache PDF bytes so .read() is called only ONCE
+    # ------------------------------------------------
+    pdf_cache = {}
+    for f in st.session_state["all_files"]:
+        pdf_cache[f.name] = f.read()
+
     status = st.empty()
     status.info("Extracting inspection photos…")
+
     all_records = []
     progress = st.progress(0)
 
     for i, pdf in enumerate(st.session_state["all_files"]):
-        pdf_bytes = pdf.read()
+        pdf_bytes = pdf_cache[pdf.name]
         all_records.extend(extract_photos(pdf.name, pdf_bytes))
         progress.progress((i + 1) / len(st.session_state["all_files"]))
 
     status.empty()
     df = pd.DataFrame(all_records)
 
-    if df.empty or "md5" not in df.columns:
+    if df.empty:
         st.warning("⚠️ No valid inspection photos found.")
         st.stop()
 
@@ -167,7 +174,7 @@ if st.button("Run Duplicate Check"):
         st.error("🚨 Duplicate inspection photos detected:")
 
         # ------------------------------------------------------------
-        # GRID CARD CSS
+        # CSS for card layout grid
         # ------------------------------------------------------------
         st.markdown("""
         <style>
@@ -202,35 +209,32 @@ if st.button("Run Duplicate Check"):
         </style>
         """, unsafe_allow_html=True)
 
-        # ------------------------------------------------------------
-        # GRID START
-        # ------------------------------------------------------------
         st.markdown("<div class='dup-grid'>", unsafe_allow_html=True)
 
         for md5_hash, group in duplicates.groupby("md5"):
 
-            # Convert first image to Base64
-            first_row = group.iloc[0]
+            # Convert ONE image to base64
+            first = group.iloc[0]
             buf = io.BytesIO()
-            first_row["image"].save(buf, format="PNG")
+            first["image"].save(buf, format="PNG")
             img_b64 = base64.b64encode(buf.getvalue()).decode()
 
-            # Build card
+            file_list_html = "".join(
+                f"• {row['file']} — Page {row['page']}<br>"
+                for _, row in group.iterrows()
+            )
+
             st.markdown(f"""
             <div class="dup-card">
                 <div class="dup-title">MD5: {md5_hash}</div>
 
-                <img class="dup-img" src="data:image/png;base64,{img_b64}">
-
                 <div class="dup-files">
                     <strong>📄 Found in:</strong><br>
-                    {''.join([f"• {row['file']} — Page {row['page']}<br>" 
-                              for _, row in group.iterrows()])}
+                    {file_list_html}
                 </div>
+
+                <img class="dup-img" src="data:image/png;base64,{img_b64}">
             </div>
             """, unsafe_allow_html=True)
 
-        # ------------------------------------------------------------
-        # GRID END
-        # ------------------------------------------------------------
         st.markdown("</div>", unsafe_allow_html=True)
