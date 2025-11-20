@@ -13,7 +13,7 @@ if st.button("🔄 Reset App"):
 st.set_page_config(page_title="Inspection Photo Duplicate Checker", layout="wide")
 
 st.markdown("""# 🟩 Inspection Photo Duplicate Checker  
-Upload riser inspection PDFs and detect strict binary duplicate photos.  
+Upload PDFs and detect strict binary duplicate photos.  
 """)
 
 uploaded_files = st.file_uploader(
