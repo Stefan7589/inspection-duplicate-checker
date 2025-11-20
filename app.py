@@ -112,6 +112,17 @@ if st.button("Run Duplicate Check"):
             cols = st.columns(len(group))
             for col, (_, row) in zip(cols, group.iterrows()):
                 col.markdown(f"**{row['file']} — Page {row['page']}**")
-                col.image(row["image"], use_column_width=50)
+                # Convert PIL image to bytes
+buf = io.BytesIO()
+row["image"].save(buf, format="PNG")
+img_bytes = buf.getvalue()
+
+# Display scaled image using HTML (safe, stable)
+col.markdown(
+    f"<img src='data:image/png;base64,{base64.b64encode(img_bytes).decode()}' "
+    f"style='width: 50%; max-width: 150px; border-radius: 6px;'>",
+    unsafe_allow_html=True
+)
+
 
 
