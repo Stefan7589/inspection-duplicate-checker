@@ -55,8 +55,6 @@ def extract_photos(pdf_name, pdf_bytes):
                 output.append({
                     "file": pdf_name,
                     "page": page_index,
-                    "width": w,
-                    "height": h,
                     "md5": md5,
                     "image": image
                 })
@@ -77,25 +75,21 @@ if st.button("Run Duplicate Check"):
     progress = st.progress(0)
     for i, pdf in enumerate(uploaded_files):
         all_records.extend(extract_photos(pdf.name, pdf.read()))
-        progress.progress((i+1)/len(uploaded_files))
+        progress.progress((i + 1) / len(uploaded_files))
 
     df = pd.DataFrame(all_records)
-
-    st.subheader("Extracted Inspection Photos")
-    st.write(df[["file", "page", "width", "height", "md5"]])
 
     # Duplicate detection
     duplicates = df[df.duplicated("md5", keep=False)].sort_values("md5")
 
-    st.subheader("Duplicate Photo Groups")
+    st.subheader("Duplicate Photo Results")
 
     if duplicates.empty:
         st.success("No duplicate inspection photos detected.")
     else:
-        # FIRST message shown
         st.warning("Duplicate inspection photos detected:")
 
-        # Then show groups
+        # Show groups
         for md5_hash, group in duplicates.groupby("md5"):
             st.markdown(f"### Duplicate Set — MD5: `{md5_hash}`")
             cols = st.columns(len(group))
