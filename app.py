@@ -19,10 +19,10 @@ if "uploader_key" not in st.session_state:
 
 # full reset-safe structure
 if st.button("Reset App"):
-    st.session_state.clear()
-    st.session_state["uploader_key"] = 1
-    st.experimental_set_query_params(_="reset")
-    st.rerun()
+    st.session_state.clear()  # wipe everything
+    st.session_state["uploader_key"] = st.session_state.get("uploader_key", 0) + 1  # rotate key every reset
+    st.experimental_set_query_params(_=str(st.session_state["uploader_key"]))  # force full widget tree rebuild
+    st.rerun()  # restart app
 
 # ----------------------------------------------------
 # Title
