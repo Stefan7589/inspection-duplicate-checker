@@ -18,16 +18,16 @@ if "uploader_key" not in st.session_state:
     st.session_state["uploader_key"] = 0
 
 if "batches" not in st.session_state:
-    st.session_state["batches"] = []  # List of batches, each batch = list of UploadedFile objects
+    st.session_state["batches"] = []  # list of batches (each batch is a list of files)
 
 if "all_files" not in st.session_state:
-    st.session_state["all_files"] = []  # Flattened list of all files in upload order
+    st.session_state["all_files"] = []  # flattened list of all uploaded files
 
 if "run_pressed" not in st.session_state:
     st.session_state["run_pressed"] = False
 
 # ----------------------------------------------------
-# Reset Button (FULL multi-reset reliability)
+# Reset Button (infinite resets, always clean)
 # ----------------------------------------------------
 if st.button("Reset App"):
     for key in list(st.session_state.keys()):
@@ -47,7 +47,7 @@ Upload PDFs in batches and detect strict binary duplicate photos.
 """)
 
 # ----------------------------------------------------
-# File uploader (user uploads batches manually)
+# File uploader (multi-batch capable)
 # ----------------------------------------------------
 uploaded_files = st.file_uploader(
     "Upload PDF Reports (multiple batches allowed)",
@@ -60,7 +60,6 @@ uploaded_files = st.file_uploader(
 # Detect new batch of uploaded files
 # ----------------------------------------------------
 if uploaded_files:
-    # Identify which of the newly uploaded files are NEW in this run
     new_files = [f for f in uploaded_files if f not in st.session_state["all_files"]]
 
     if new_files:
@@ -68,7 +67,7 @@ if uploaded_files:
         st.session_state["all_files"].extend(new_files)
 
 # ----------------------------------------------------
-# Display batch summary (NO file list, as requested)
+# Display batch summary
 # ----------------------------------------------------
 if st.session_state["batches"]:
     st.subheader("Uploaded Batches:")
@@ -81,24 +80,19 @@ if st.session_state["batches"]:
 if st.session_state["batches"]:
     if st.button("Undo Last Batch"):
 
-        # Remove last batch
         last_batch = st.session_state["batches"].pop()
 
         for f in last_batch:
             if f in st.session_state["all_files"]:
                 st.session_state["all_files"].remove(f)
 
-        # Allow running again
         st.session_state["run_pressed"] = False
-
-        # Force uploader to refresh so removed files disappear visually
         st.session_state["uploader_key"] += 1
 
         st.rerun()
 
-
 # ----------------------------------------------------
-# Extract Inspection Photos
+# Extract inspection photos
 # ----------------------------------------------------
 def extract_photos(pdf_name, pdf_bytes):
     output = []
@@ -107,15 +101,15 @@ def extract_photos(pdf_name, pdf_bytes):
     for page_index in range(len(doc)):
         page = doc[page_index]
 
-        for img_index, img in enumerate(page.get_images(full=True)):
+        for img in page.get_images(full=True):
             xref = img[0]
-            base_img = doc.extract_image(xref)
-            img_bytes = base_img["image"]
+            extracted = doc.extract_image(xref)
+            img_bytes = extracted["image"]
 
             image = Image.open(io.BytesIO(img_bytes))
             w, h = image.size
 
-            # UNIVERSAL working inspection-photo threshold
+            # UNIVERSAL WORKING THRESHOLD
             if w >= 300 and h >= 150:
                 md5 = hashlib.md5(img_bytes).hexdigest()
                 output.append({
@@ -137,24 +131,20 @@ if st.button("Run Duplicate Check"):
         st.error("Please upload files first.")
         st.stop()
 
-    # -------------------------------------------
-    # Detect duplicate filenames BEFORE processing
-    # -------------------------------------------
+    # Duplicate filename detection
     filenames = [f.name for f in st.session_state["all_files"]]
     duplicates_by_name = {x for x in filenames if filenames.count(x) > 1}
 
     if duplicates_by_name:
         st.error("⚠️ Duplicate PDF filenames detected!")
         st.warning(
-            "You uploaded at least one PDF twice:\n\n" +
+            "You uploaded the same PDF file more than once:\n\n" +
             "\n".join(f"- **{name}**" for name in duplicates_by_name) +
-            "\n\nUse Undo Last Batch or Reset to fix your upload."
+            "\n\nUse Undo Last Batch or Reset to fix this."
         )
         st.stop()
 
-    # -------------------------------------------
-    # Extract inspection photos with progress bar
-    # -------------------------------------------
+    # Extraction
     status = st.empty()
     status.info("Extracting inspection photos…")
     all_records = []
@@ -166,31 +156,25 @@ if st.button("Run Duplicate Check"):
         progress.progress((i + 1) / len(st.session_state["all_files"]))
 
     status.empty()
-
     df = pd.DataFrame(all_records)
 
-    # -------------------------------------------
-    # No images found safety
-    # -------------------------------------------
     if df.empty or "md5" not in df.columns:
-        st.warning("⚠️ No valid inspection photos were found in any uploaded PDFs.")
+        st.warning("⚠️ No valid inspection photos found.")
         st.stop()
 
-    # -------------------------------------------
     # Duplicate detection
-    # -------------------------------------------
     duplicates = df[df.duplicated("md5", keep=False)].sort_values("md5")
 
     st.subheader("Duplicate Photo Results")
 
     if duplicates.empty:
         st.success("✅ Good to go! No duplicate inspection photos detected.")
-        else:
+    else:
         st.error("🚨 Duplicate inspection photos detected:")
 
         for md5_hash, group in duplicates.groupby("md5"):
 
-            # Convert PIL → Base64 for the FIRST image only
+            # Convert the FIRST image to base64 (display a single image)
             first_row = group.iloc[0]
             buf = io.BytesIO()
             first_row["image"].save(buf, format="PNG")
@@ -208,7 +192,7 @@ if st.button("Run Duplicate Check"):
                 unsafe_allow_html=True
             )
 
-            # MAIN CARD WITH ONE IMAGE + FILE LIST
+            # CARD BODY
             st.markdown(
                 f"""
                 <div style="
@@ -224,7 +208,7 @@ if st.button("Run Duplicate Check"):
                     
                     <div style="font-size:15px; margin-top:10px;">
                         <strong>📄 Found in:</strong><br>
-                        {''.join([f"• {row['file']} — Page {row['page']}<br>" 
+                        {''.join([f"• {row['file']} — Page {row['page']}<br>"
                                   for _, row in group.iterrows()])}
                     </div>
                 </div>
