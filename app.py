@@ -152,76 +152,78 @@ if st.button("Run Duplicate Check"):
 
     st.subheader("Duplicate Photo Results")
 
-    if duplicates.empty:
-        st.success("No duplicates found. Good to go!")
-        st.stop()
+if duplicates.empty:
+    st.success("✅ Good to go! No duplicate inspection photos detected.")
+else:
+    st.error("Duplicate inspection photos detected.")
 
-    else:
-        st.error("Duplicate inspection photos detected.")
+    # CSS styling for card grid
+    st.markdown("""
+    <style>
+        .dup-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 20px;
+            margin-top: 25px;
+        }
+        .dup-card {
+            background: #1f1f1f;
+            border: 1px solid #333;
+            border-radius: 10px;
+            padding: 12px;
+            box-shadow: 0 0 8px rgba(0,0,0,0.5);
+        }
+        .dup-img {
+            width: 100%;
+            border-radius: 6px;
+        }
+        .dup-files {
+            font-size: 14px;
+            margin-top: 10px;
+            color: #ddd;
+        }
+        .dup-title {
+            text-align: center;
+            font-family: monospace;
+            color: #4caf50;
+            margin-bottom: 10px;
+            font-size: 16px;
+        }
+    </style>
+    """, unsafe_allow_html=True)
 
-        # ---------------- CSS ----------------
-        st.markdown("""
-        <style>
-            .dup-grid {
-                display: grid;
-                grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-                gap: 20px;
-                margin-top: 25px;
-            }
-            .dup-card {
-                background: #1f1f1f;
-                border: 1px solid #333;
-                border-radius: 10px;
-                padding: 12px;
-                box-shadow: 0 0 8px rgba(0,0,0,0.5);
-            }
-            .dup-img {
-                width: 100%;
-                border-radius: 6px;
-            }
-            .dup-files {
-                font-size: 13px;
-                color: #ddd;
-                margin-top: 10px;
-                line-height: 1.3;
-            }
-            .dup-title {
-                text-align: center;
-                font-family: monospace;
-                color: #4caf50;
-                margin-bottom: 8px;
-            }
-        </style>
-        """, unsafe_allow_html=True)
+    # Start wrapper
+    st.markdown("<div class='dup-grid'>", unsafe_allow_html=True)
 
-        # ---------------- GRID START ----------------
-        st.markdown("<div class='dup-grid'>", unsafe_allow_html=True)
+    # Loop through duplicate sets
+    for md5_hash, group in duplicates.groupby("md5"):
 
-        for md5_hash, group in duplicates.groupby("md5"):
+        # Convert first image to base64
+        first_row = group.iloc[0]
+        buf = io.BytesIO()
+        first_row["image"].save(buf, format="PNG")
+        img_b64 = base64.b64encode(buf.getvalue()).decode()
 
-            first_row = group.iloc[0]
-            buffer = io.BytesIO()
-            first_row["image"].save(buffer, format="PNG")
-            img_b64 = base64.b64encode(buffer.getvalue()).decode()
+        # Build file list
+        files_html = "".join(
+            f"• {row['file']} — Page {row['page']}<br>"
+            for _, row in group.iterrows()
+        )
 
-            files_html = "".join(
-                f"• {row['file']} — Page {row['page']}<br>"
-                for _, row in group.iterrows()
-            )
-
-            card_html = f"""
-            <div class="dup-card">
-                <div class="dup-title">MD5: {md5_hash}</div>
-
-                <img class="dup-img" src="data:image/png;base64,{img_b64}">
-
-                <div class="dup-files">
-                    <strong>📄 Reports containing this image:</strong><br>
-                    {files_html}
-                </div>
+        # Build the card
+        card_html = f"""
+        <div class="dup-card">
+            <div class="dup-title">MD5: {md5_hash}</div>
+            <img class="dup-img" src="data:image/png;base64,{img_b64}">
+            <div class="dup-files">
+                <strong>📄 Found in:</strong><br>
+                {files_html}
             </div>
-            """
+        </div>
+        """
 
-            st.markdown(card_html, unsafe_allow_html=True)
+        st.markdown(card_html, unsafe_allow_html=True)
 
-        st.markdown("</div>", unsafe_allow_html=True)
+    # End grid
+    st.markdown("</div>", unsafe_allow_html=True)
+
