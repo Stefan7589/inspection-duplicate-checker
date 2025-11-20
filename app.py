@@ -95,6 +95,22 @@ if st.button("Run Duplicate Check"):
         st.error("Please upload PDF files first.")
         st.stop()
 
+    # -------------------------------------------
+    # Check for duplicate filenames in upload list
+    # -------------------------------------------
+    filenames = [f.name for f in uploaded_files]
+    duplicates_by_name = set([x for x in filenames if filenames.count(x) > 1])
+
+    if duplicates_by_name:
+        st.error("⚠️ Duplicate PDF filenames detected!")
+        st.warning(
+            "The following files appear more than once:\n\n" +
+            "\n".join(f"- **{name}**" for name in duplicates_by_name) +
+            "\n\nPlease re-upload your batch without duplicates."
+        )
+        st.stop()
+
+
     # Temporary status message
     status = st.empty()
     status.info("Extracting inspection photos…")
