@@ -30,7 +30,6 @@ if st.button("Reset App"):
     for key in list(st.session_state.keys()):
         if key not in ["uploader_key"]:
             del st.session_state[key]
-
     st.session_state["uploader_key"] += 1
     st.experimental_set_query_params(_=str(st.session_state["uploader_key"]))
     st.rerun()
@@ -58,7 +57,6 @@ uploaded_files = st.file_uploader(
 # ----------------------------------------------------
 if uploaded_files:
     new_files = [f for f in uploaded_files if f not in st.session_state["all_files"]]
-
     if new_files:
         st.session_state["batches"].append(new_files)
         st.session_state["all_files"].extend(new_files)
@@ -77,7 +75,6 @@ if st.session_state["batches"]:
 if st.session_state["batches"]:
     if st.button("Undo Last Batch"):
         last_batch = st.session_state["batches"].pop()
-
         for f in last_batch:
             if f in st.session_state["all_files"]:
                 st.session_state["all_files"].remove(f)
@@ -102,7 +99,7 @@ def extract_photos(pdf_name, pdf_bytes):
             image = Image.open(io.BytesIO(img_bytes))
             w, h = image.size
 
-            if w >= 300 and h >= 150:  # Inspection photos
+            if w >= 300 and h >= 150:
                 md5 = hashlib.md5(img_bytes).hexdigest()
                 output.append({
                     "file": pdf_name,
@@ -122,20 +119,20 @@ if st.button("Run Duplicate Check"):
         st.error("Please upload files first.")
         st.stop()
 
-    # Check duplicate filenames
+    # Duplicate filename check
     filenames = [f.name for f in st.session_state["all_files"]]
     duplicates_by_name = {x for x in filenames if filenames.count(x) > 1}
 
     if duplicates_by_name:
         st.error("⚠️ Duplicate PDF filenames detected!")
         st.warning(
-            "You uploaded the same PDF twice:\n\n" +
-            "\n".join(f"• **{name}**" for name in duplicates_by_name) +
-            "\n\nUse Undo Last Batch or Reset."
+            "You uploaded the same file twice:\n\n" +
+            "\n".join([f"• {name}" for name in duplicates_by_name]) +
+            "\n\nUndo your last batch or Reset the app."
         )
         st.stop()
 
-    # Fix: Cache PDF bytes
+    # Cache PDF bytes
     pdf_cache = {f.name: f.read() for f in st.session_state["all_files"]}
 
     status = st.empty()
@@ -143,7 +140,6 @@ if st.button("Run Duplicate Check"):
 
     all_records = []
     progress = st.progress(0)
-
     for i, pdf in enumerate(st.session_state["all_files"]):
         pdf_bytes = pdf_cache[pdf.name]
         all_records.extend(extract_photos(pdf.name, pdf_bytes))
@@ -162,66 +158,76 @@ if st.button("Run Duplicate Check"):
 
     if duplicates.empty:
         st.success("✅ Good to go! No duplicate inspection photos detected.")
+
     else:
         st.error("🚨 Duplicate inspection photos detected:")
-# ---------------- CSS ----------------
-st.markdown("""
-<style>
-    .dup-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-        gap: 20px;
-        margin-top: 25px;
-    }
-    .dup-card {
-        background: #1f1f1f;
-        border: 1px solid #333;
-        border-radius: 10px;
-        padding: 12px;
-        box-shadow: 0 0 8px rgba(0,0,0,0.5);
-    }
-    .dup-img {
-        width: 100%;
-        border-radius: 6px;
-    }
-    .dup-files {
-        font-size: 13px;
-        color: #ddd;
-        margin-top: 10px;
-        margin-bottom: 10px;
-        line-height: 1.3;
-    }
-    .dup-title {
-        text-align: center;
-        font-family: monospace;
-        color: #4caf50;
-        margin-bottom: 8px;
-    }
-</style>
-""", unsafe_allow_html=True)
 
-# ---------------- START GRID ----------------
-st.markdown("<div class='dup-grid'>", unsafe_allow_html=True)
+        # ------------------------------------------------------------
+        # CSS for Card Layout
+        # ------------------------------------------------------------
+        st.markdown("""
+        <style>
+            .dup-grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+                gap: 20px;
+                margin-top: 25px;
+            }
+            .dup-card {
+                background: #1f1f1f;
+                padding: 15px;
+                border-radius: 10px;
+                border: 1px solid #333;
+                box-shadow: 0 0 8px rgba(0,0,0,0.5);
+            }
+            .dup-title {
+                font-family: monospace;
+                font-size: 15px;
+                color: #4CAF50;
+                text-align: center;
+                margin-bottom: 10px;
+            }
+            .dup-files {
+                font-size: 13px;
+                margin-bottom: 10px;
+            }
+            .dup-img {
+                width: 100%;
+                border-radius: 6px;
+            }
+        </style>
+        """, unsafe_allow_html=True)
 
-for md5_hash, group in duplicates.groupby("md5"):
+        # Start Grid
+        st.markdown("<div class='dup-grid'>", unsafe_allow_html=True)
 
-    # Convert 1 image to base64
-    first_row = group.iloc[0]
-    buffer = io.BytesIO()
-    first_row["image"].save(buffer, format="PNG")
-    img_b64 = base64.b64encode(buffer.getvalue()).decode()
+        for md5_hash, group in duplicates.groupby("md5"):
 
-    # File list
-    files_html = "".join(
-        f"• {row['file']} — Page {row['page']}<br>"
-        for _, row in group.iterrows()
-    )
+            # Convert representative image
+            first_row = group.iloc[0]
+            buf = io.BytesIO()
+            first_row["image"].save(buf, format="PNG")
+            img_b64 = base64.b64encode(buf.getvalue()).decode()
 
-    # CARD HTML
-    card_html = f"""
-    <div class="dup-card">
-        <div class="dup-title">MD5: {md5_hash}</div>
-        
-        <div class="dup-files">
-            <strong>📄 Found in:</strong><br>
-            {file
+            files_html = "".join(
+                f"• {row['file']} — Page {row['page']}<br>"
+                for _, row in group.iterrows()
+            )
+
+            card_html = f"""
+            <div class="dup-card">
+                <div class="dup-title">MD5: {md5_hash}</div>
+
+                <div class="dup-files">
+                    <strong>📄 Found in:</strong><br>
+                    {files_html}
+                </div>
+
+                <img class="dup-img" src="data:image/png;base64,{img_b64}">
+            </div>
+            """
+
+            st.markdown(card_html, unsafe_allow_html=True)
+
+        # End Grid
+        st.markdown("</div>", unsafe_allow_html=True)
