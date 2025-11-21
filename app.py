@@ -35,7 +35,10 @@ if st.button("Reset App"):
 # ----------------------------------------------------
 # Title
 # ----------------------------------------------------
-st.markdown("# Inspection Photo Duplicate Checker")
+st.markdown("""
+# Inspection Photo Duplicate Checker  
+Upload PDFs in batches and detect strict binary duplicate photos.
+""")
 
 # ----------------------------------------------------
 # File Upload
@@ -56,13 +59,13 @@ if uploaded_files:
         st.session_state["batches"].append(new_files)
         st.session_state["all_files"].extend(new_files)
 
-# Show Batches
+# Show batches
 if st.session_state["batches"]:
     st.subheader("Uploaded Batches:")
     for i, batch in enumerate(st.session_state["batches"], start=1):
         st.write(f"**Batch {i}: {len(batch)} files**")
 
-# Undo Batch
+# Undo last batch
 if st.session_state["batches"]:
     if st.button("Undo Last Batch"):
         last = st.session_state["batches"].pop()
@@ -71,33 +74,36 @@ if st.session_state["batches"]:
         st.session_state["uploader_key"] += 1
         st.rerun()
 
+
 # ----------------------------------------------------
-# Extract Photos
+# Extract Inspection Photos
 # ----------------------------------------------------
 def extract_photos(pdf_name, pdf_bytes):
-    out = []
+    output = []
     doc = fitz.open(stream=pdf_bytes, filetype="pdf")
 
-    for page_idx in range(len(doc)):
-        page = doc[page_idx]
+    for page_index in range(len(doc)):
+        page = doc[page_index]
         for img in page.get_images(full=True):
-
             xref = img[0]
-            data = doc.extract_image(xref)
-            img_bytes = data["image"]
+            extracted = doc.extract_image(xref)
+            img_bytes = extracted["image"]
 
+            # load image
             image = Image.open(io.BytesIO(img_bytes))
             w, h = image.size
 
+            # Must be a real inspection photo, ignore small logos/icons
             if w >= 300 and h >= 150:
                 md5 = hashlib.md5(img_bytes).hexdigest()
-                out.append({
+                output.append({
                     "file": pdf_name,
-                    "page": page_idx,
+                    "page": page_index,
                     "md5": md5,
                     "image": image
                 })
-    return out
+    return output
+
 
 # ----------------------------------------------------
 # Run Duplicate Check
@@ -108,12 +114,15 @@ if st.button("Run Duplicate Check"):
         st.error("Please upload files first.")
         st.stop()
 
+    # Cache file bytes
     pdf_cache = {f.name: f.read() for f in st.session_state["all_files"]}
 
     status = st.info("Extracting inspection photos...")
     all_photos = []
+
     for pdf in st.session_state["all_files"]:
         all_photos.extend(extract_photos(pdf.name, pdf_cache[pdf.name]))
+
     status.empty()
 
     df = pd.DataFrame(all_photos)
@@ -127,60 +136,64 @@ if st.button("Run Duplicate Check"):
     st.subheader("Duplicate Photo Results")
 
     if duplicates.empty:
-        st.success("No duplicates detected.")
+        st.success("No duplicate inspection photos detected.")
         st.stop()
 
     st.error("Duplicate inspection photos detected.")
 
+
     # ----------------------------------------------------
-    # CSS for Card Grid
+    # CSS CARD GRID (4 cards per row automatically)
     # ----------------------------------------------------
     st.markdown("""
     <style>
-    .dup-grid {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 18px;
-        margin-top: 20px;
-    }
-    .dup-card {
-        width: 320px;
-        background: #1f1f1f;
-        border: 1px solid #333;
-        border-radius: 10px;
-        padding: 12px;
-        box-shadow: 0 0 8px rgba(0,0,0,0.4);
-    }
-    .dup-title {
-        font-family: monospace;
-        color: #4caf50;
-        text-align: center;
-        margin-bottom: 8px;
-    }
-    .dup-img {
-        width: 100%;
-        border-radius: 6px;
-    }
-    .dup-files {
-        margin-top: 10px;
-        color: #ddd;
-        font-size: 13px;
-    }
+        .dup-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            margin-top: 20px;
+        }
+        .dup-card {
+            width: 300px;
+            background: #1f1f1f;
+            border: 1px solid #333;
+            border-radius: 10px;
+            padding: 12px;
+            box-shadow: 0 0 8px rgba(0,0,0,0.4);
+        }
+        .dup-img {
+            width: 100%;
+            border-radius: 6px;
+        }
+        .dup-title {
+            font-family: monospace;
+            color: #4caf50;
+            text-align: center;
+            margin-bottom: 10px;
+        }
+        .dup-files {
+            margin-top: 10px;
+            color: #ddd;
+            font-size: 13px;
+        }
     </style>
     """, unsafe_allow_html=True)
 
+
     # ----------------------------------------------------
-    # RENDER GRID
+    # Render Cards
     # ----------------------------------------------------
     st.markdown("<div class='dup-grid'>", unsafe_allow_html=True)
 
-    grouped_reports = []  # For summary groups
+    relation_groups_raw = []
 
     for md5_hash, group in duplicates.groupby("md5"):
 
-        files = list(group["file"].unique())
-        grouped_reports.append(files)
+        # Collect file set for summary
+        related = sorted(set(group["file"].unique()))
+        relation_groups_raw.append(tuple(related))
 
+        # Render card
         first_img = group.iloc[0]["image"]
         buf = io.BytesIO()
         first_img.save(buf, format="PNG")
@@ -195,7 +208,10 @@ if st.button("Run Duplicate Check"):
         <div class="dup-card">
             <div class="dup-title">{md5_hash}</div>
             <img class="dup-img" src="data:image/png;base64,{img_b64}">
-            <div class="dup-files"><strong>Found in:</strong><br>{file_list_html}</div>
+            <div class="dup-files">
+                <strong>Found in:</strong><br>
+                {file_list_html}
+            </div>
         </div>
         """
 
@@ -203,12 +219,22 @@ if st.button("Run Duplicate Check"):
 
     st.markdown("</div>", unsafe_allow_html=True)
 
+
     # ----------------------------------------------------
-    # SUMMARY: GROUPED REPORT SETS
+    # FINAL SUMMARY (DEDUPED GROUPS)
     # ----------------------------------------------------
     st.subheader("Reports Containing Duplicate Photos (Grouped by Relation)")
 
-    for i, group in enumerate(grouped_reports, start=1):
+    # Remove duplicates while preserving order
+    seen = set()
+    unique_groups = []
+    for g in relation_groups_raw:
+        if g not in seen:
+            seen.add(g)
+            unique_groups.append(g)
+
+    # Display summary
+    for i, group in enumerate(unique_groups, start=1):
         st.markdown(f"### Group {i}")
-        for file in sorted(set(group)):
-            st.write(f"• {file}")
+        for report in group:
+            st.write(f"• {report}")
