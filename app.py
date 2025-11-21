@@ -237,3 +237,106 @@ if st.button("Run Duplicate Check"):
         st.markdown(f"### Group {i}")
         for file in sorted(group):
             st.write(f"• {file}")
+
+from reportlab.lib.pagesizes import letter
+from reportlab.pdfgen import canvas
+from reportlab.lib.utils import ImageReader
+from reportlab.lib.units import inch
+
+# ----------------------------------------------------
+# PDF EXPORT SECTION
+# ----------------------------------------------------
+if duplicates is not None and not duplicates.empty:
+
+    def generate_pdf():
+        buffer = io.BytesIO()
+        c = canvas.Canvas(buffer, pagesize=letter)
+
+        width, height = letter
+        margin = 40
+        y = height - margin
+
+        # -------- TITLE --------
+        c.setFont("Helvetica-Bold", 20)
+        c.drawString(margin, y, "Inspection Photo Duplicate Report")
+        y -= 40
+
+        # -------- DUPLICATE IMAGES --------
+        c.setFont("Helvetica-Bold", 16)
+        c.drawString(margin, y, "Duplicate Photo Sets")
+        y -= 30
+
+        for md5_hash, group in duplicates.groupby("md5"):
+
+            # Header
+            c.setFont("Helvetica-Bold", 12)
+            c.drawString(margin, y, f"MD5: {md5_hash}")
+            y -= 18
+
+            # Thumbnail image
+            first_img = group.iloc[0]["image"]
+            buf = io.BytesIO()
+            first_img.thumbnail((250, 250))
+            first_img.save(buf, format="PNG")
+            buf.seek(0)
+
+            img = ImageReader(buf)
+
+            img_width = 2.5 * inch
+            img_height = 2.5 * inch
+
+            if y - img_height < margin:
+                c.showPage()
+                y = height - margin
+
+            c.drawImage(img, margin, y - img_height, width=img_width, height=img_height)
+            y -= img_height + 10
+
+            # Text of reports
+            c.setFont("Helvetica", 11)
+            for _, row in group.iterrows():
+                c.drawString(margin, y, f"• {row['file']} — Page {row['page']}")
+                y -= 14
+
+                if y < margin:
+                    c.showPage()
+                    y = height - margin
+
+            y -= 15
+
+        # -------- SUMMARY SECTION --------
+        c.showPage()
+        y = height - margin
+
+        c.setFont("Helvetica-Bold", 18)
+        c.drawString(margin, y, "Summary — Related Reports")
+        y -= 30
+
+        for i, group in enumerate(report_groups, start=1):
+            c.setFont("Helvetica-Bold", 14)
+            c.drawString(margin, y, f"Group {i}")
+            y -= 20
+
+            c.setFont("Helvetica", 12)
+            for file in sorted(group):
+                c.drawString(margin, y, f"• {file}")
+                y -= 15
+
+                if y < margin:
+                    c.showPage()
+                    y = height - margin
+
+            y -= 20
+
+        c.save()
+        buffer.seek(0)
+        return buffer
+
+    pdf_buffer = generate_pdf()
+
+    st.download_button(
+        label="📄 Download PDF Report",
+        data=pdf_buffer,
+        file_name="duplicate_photo_report.pdf",
+        mime="application/pdf"
+    )
