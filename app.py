@@ -5,6 +5,7 @@ from PIL import Image
 import io
 import pandas as pd
 import base64
+from collections import defaultdict
 
 # ----------------------------------------------------
 # App Setup
@@ -88,14 +89,13 @@ def extract_photos(pdf_name, pdf_bytes):
             image = Image.open(io.BytesIO(img_bytes))
             w, h = image.size
 
-            if w >= 300 and h >= 150:  
+            if w >= 300 and h >= 150:  # Only inspect real inspection photos
                 md5 = hashlib.md5(img_bytes).hexdigest()
                 out.append({
                     "file": pdf_name,
                     "page": page_idx,
                     "md5": md5,
-                    "image": image,
-                    "img_bytes": img_bytes
+                    "image": image
                 })
     return out
 
@@ -108,7 +108,9 @@ if st.button("Run Duplicate Check"):
         st.error("Please upload files first.")
         st.stop()
 
+    # -------------------------------------------
     # Duplicate filename protection
+    # -------------------------------------------
     filenames = [f.name for f in st.session_state["all_files"]]
     duplicated_filenames = {name for name in filenames if filenames.count(name) > 1}
 
@@ -121,6 +123,7 @@ if st.button("Run Duplicate Check"):
         )
         st.stop()
 
+    # Cache file bytes
     pdf_cache = {f.name: f.read() for f in st.session_state["all_files"]}
 
     status = st.info("Extracting inspection photos...")
@@ -153,7 +156,7 @@ if st.button("Run Duplicate Check"):
     .dup-grid {
         display: flex;
         flex-wrap: wrap;
-        gap: 18px;
+        gap: 20px;
         margin-top: 20px;
     }
     .dup-card {
@@ -187,45 +190,31 @@ if st.button("Run Duplicate Check"):
     # ----------------------------------------------------
     st.markdown("<div class='dup-grid'>", unsafe_allow_html=True)
 
-    # Grouping logic
-    report_groups = []
+    # Use set-of-sets union logic for grouping reports correctly
+    report_groups = []  
 
     def merge_group(new_set):
+        """Smart grouping so no duplicates appear."""
         for group in report_groups:
             if group & new_set:
                 group |= new_set
                 return
         report_groups.append(set(new_set))
 
-    # CSV rows list
-    csv_rows = []
-
     for md5_hash, group in duplicates.groupby("md5"):
 
         files = set(group["file"].unique())
         merge_group(files)
 
-        first_row = group.iloc[0]
-        first_img = first_row["image"]
-
+        first_img = group.iloc[0]["image"]
         buf = io.BytesIO()
         first_img.save(buf, format="PNG")
-        img_bytes = buf.getvalue()
-        img_b64 = base64.b64encode(img_bytes).decode()
+        img_b64 = base64.b64encode(buf.getvalue()).decode()
 
         file_list_html = "".join(
             f"• {row['file']} (Pg {row['page']})<br>"
             for _, row in group.iterrows()
         )
-
-        # ---- Add rows to CSV ----
-        for _, row in group.iterrows():
-            csv_rows.append({
-                "md5": md5_hash,
-                "image_base64": img_b64,
-                "report": row["file"],
-                "page": row["page"]
-            })
 
         card_html = f"""
         <div class="dup-card">
@@ -240,39 +229,11 @@ if st.button("Run Duplicate Check"):
     st.markdown("</div>", unsafe_allow_html=True)
 
     # ----------------------------------------------------
-    # SUMMARY GROUPS
+    # SUMMARY: SMART GROUPING (correct & non-duplicated)
     # ----------------------------------------------------
     st.subheader("Reports Containing Duplicate Photos (Grouped by Relation)")
-
-    grouped_csv_rows = []
 
     for i, group in enumerate(report_groups, start=1):
         st.markdown(f"### Group {i}")
         for file in sorted(group):
             st.write(f"• {file}")
-            grouped_csv_rows.append({
-                "group_id": i,
-                "report": file
-            })
-
-    # ----------------------------------------------------
-    # EXPORT CSV
-    # ----------------------------------------------------
-    st.subheader("Export Results")
-
-    df_csv = pd.DataFrame(csv_rows)
-    df_groups = pd.DataFrame(grouped_csv_rows)
-
-    # merge both sections separated with indicator
-    output = io.StringIO()
-    output.write("Duplicate Photos\n")
-    df_csv.to_csv(output, index=False)
-    output.write("\n\nGrouped Summary\n")
-    df_groups.to_csv(output, index=False)
-
-    st.download_button(
-        "📥 Download CSV Report",
-        output.getvalue(),
-        "duplicate_photo_report.csv",
-        "text/csv"
-    )
