@@ -28,6 +28,8 @@ if "batches" not in st.session_state:
     st.session_state["batches"] = []
 if "all_files" not in st.session_state:
     st.session_state["all_files"] = []
+if "pdf_bytes" not in st.session_state:
+    st.session_state["pdf_bytes"] = {}   # SAFE storage for file bytes
 
 
 # ----------------------------------------------------
@@ -59,13 +61,24 @@ uploaded_files = st.file_uploader(
 
 
 # ----------------------------------------------------
-# Batch Detection
+# Batch Detection — FIXED
 # ----------------------------------------------------
 if uploaded_files:
-    new_files = [f for f in uploaded_files if f not in st.session_state["all_files"]]
+    new_files = []
+    for f in uploaded_files:
+
+        if f not in st.session_state["all_files"]:
+
+            # READ BYTES ONCE AND STORE FOREVER
+            pdf_bytes = f.read()
+            st.session_state["pdf_bytes"][f.name] = pdf_bytes
+
+            new_files.append(f)
+
     if new_files:
         st.session_state["batches"].append(new_files)
         st.session_state["all_files"].extend(new_files)
+
 
 # Show Batches
 if st.session_state["batches"]:
@@ -78,8 +91,14 @@ if st.session_state["batches"]:
 if st.session_state["batches"]:
     if st.button("Undo Last Batch"):
         last = st.session_state["batches"].pop()
+
         for f in last:
-            st.session_state["all_files"].remove(f)
+            # Remove file and bytes
+            if f in st.session_state["all_files"]:
+                st.session_state["all_files"].remove(f)
+            if f.name in st.session_state["pdf_bytes"]:
+                del st.session_state["pdf_bytes"][f.name]
+
         st.session_state["uploader_key"] += 1
         st.rerun()
 
@@ -136,8 +155,8 @@ if st.button("Run Duplicate Check"):
         )
         st.stop()
 
-    # Cache bytes
-    pdf_cache = {f.name: f.read() for f in st.session_state["all_files"]}
+    # SAFE PDF BYTES CACHE
+    pdf_cache = st.session_state["pdf_bytes"]
 
     status = st.info("Extracting inspection photos...")
     all_photos = []
@@ -248,8 +267,9 @@ if st.button("Run Duplicate Check"):
         for file in sorted(group):
             st.write(f"• {file}")
 
+
     # ----------------------------------------------------
-    # PDF EXPORT BUTTON (NOW SAFE!)
+    # PDF EXPORT BUTTON (SAFE)
     # ----------------------------------------------------
     def generate_pdf():
         buffer = io.BytesIO()
@@ -274,7 +294,6 @@ if st.button("Run Duplicate Check"):
             c.drawString(margin, y, f"MD5: {md5_hash}")
             y -= 18
 
-            # Image
             first_img = group.iloc[0]["image"]
             buf = io.BytesIO()
             first_img.thumbnail((250, 250))
@@ -282,15 +301,14 @@ if st.button("Run Duplicate Check"):
             buf.seek(0)
 
             img = ImageReader(buf)
-            img_width = 2.5 * inch
-            img_height = 2.5 * inch
+            img_w, img_h = 2.5 * inch, 2.5 * inch
 
-            if y - img_height < margin:
+            if y - img_h < margin:
                 c.showPage()
                 y = height - margin
 
-            c.drawImage(img, margin, y - img_height, width=img_width, height=img_height)
-            y -= img_height + 10
+            c.drawImage(img, margin, y - img_h, width=img_w, height=img_h)
+            y -= img_h + 10
 
             c.setFont("Helvetica", 11)
             for _, row in group.iterrows():
@@ -302,7 +320,7 @@ if st.button("Run Duplicate Check"):
 
             y -= 15
 
-        # SUMMARY
+        # SUMMARY PAGE
         c.showPage()
         y = height - margin
 
@@ -319,7 +337,6 @@ if st.button("Run Duplicate Check"):
             for file in sorted(group):
                 c.drawString(margin, y, f"• {file}")
                 y -= 15
-
                 if y < margin:
                     c.showPage()
                     y = height - margin
@@ -329,6 +346,7 @@ if st.button("Run Duplicate Check"):
         c.save()
         buffer.seek(0)
         return buffer
+
 
     pdf_buffer = generate_pdf()
 
