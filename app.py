@@ -7,10 +7,17 @@ import pandas as pd
 import base64
 from collections import defaultdict
 
+from reportlab.lib.pagesizes import letter
+from reportlab.pdfgen import canvas
+from reportlab.lib.utils import ImageReader
+from reportlab.lib.units import inch
+
+
 # ----------------------------------------------------
 # App Setup
 # ----------------------------------------------------
 st.set_page_config(page_title="Inspection Photo Duplicate Checker", layout="wide")
+
 
 # ----------------------------------------------------
 # Session Keys
@@ -22,6 +29,7 @@ if "batches" not in st.session_state:
 if "all_files" not in st.session_state:
     st.session_state["all_files"] = []
 
+
 # ----------------------------------------------------
 # Reset App
 # ----------------------------------------------------
@@ -32,10 +40,12 @@ if st.button("Reset App"):
     st.session_state["uploader_key"] += 1
     st.rerun()
 
+
 # ----------------------------------------------------
 # Title
 # ----------------------------------------------------
 st.markdown("# Inspection Photo Duplicate Checker")
+
 
 # ----------------------------------------------------
 # File Upload
@@ -46,6 +56,7 @@ uploaded_files = st.file_uploader(
     accept_multiple_files=True,
     key=f"uploader_{st.session_state['uploader_key']}"
 )
+
 
 # ----------------------------------------------------
 # Batch Detection
@@ -62,6 +73,7 @@ if st.session_state["batches"]:
     for i, batch in enumerate(st.session_state["batches"], start=1):
         st.write(f"**Batch {i}: {len(batch)} files**")
 
+
 # Undo Batch
 if st.session_state["batches"]:
     if st.button("Undo Last Batch"):
@@ -70,6 +82,7 @@ if st.session_state["batches"]:
             st.session_state["all_files"].remove(f)
         st.session_state["uploader_key"] += 1
         st.rerun()
+
 
 # ----------------------------------------------------
 # Extract Photos
@@ -89,7 +102,7 @@ def extract_photos(pdf_name, pdf_bytes):
             image = Image.open(io.BytesIO(img_bytes))
             w, h = image.size
 
-            if w >= 300 and h >= 150:  # Only inspect real inspection photos
+            if w >= 300 and h >= 150:
                 md5 = hashlib.md5(img_bytes).hexdigest()
                 out.append({
                     "file": pdf_name,
@@ -98,6 +111,8 @@ def extract_photos(pdf_name, pdf_bytes):
                     "image": image
                 })
     return out
+
+
 
 # ----------------------------------------------------
 # Run Duplicate Check
@@ -108,9 +123,7 @@ if st.button("Run Duplicate Check"):
         st.error("Please upload files first.")
         st.stop()
 
-    # -------------------------------------------
-    # Duplicate filename protection
-    # -------------------------------------------
+    # Duplicate filename check
     filenames = [f.name for f in st.session_state["all_files"]]
     duplicated_filenames = {name for name in filenames if filenames.count(name) > 1}
 
@@ -123,7 +136,7 @@ if st.button("Run Duplicate Check"):
         )
         st.stop()
 
-    # Cache file bytes
+    # Cache bytes
     pdf_cache = {f.name: f.read() for f in st.session_state["all_files"]}
 
     status = st.info("Extracting inspection photos...")
@@ -149,7 +162,7 @@ if st.button("Run Duplicate Check"):
     st.error("Duplicate inspection photos detected.")
 
     # ----------------------------------------------------
-    # CSS for Card Grid
+    # CSS for Cards
     # ----------------------------------------------------
     st.markdown("""
     <style>
@@ -185,22 +198,19 @@ if st.button("Run Duplicate Check"):
     </style>
     """, unsafe_allow_html=True)
 
-    # ----------------------------------------------------
-    # RENDER GRID
-    # ----------------------------------------------------
     st.markdown("<div class='dup-grid'>", unsafe_allow_html=True)
 
-    # Use set-of-sets union logic for grouping reports correctly
-    report_groups = []  
+    # intelligent grouping
+    report_groups = []
 
     def merge_group(new_set):
-        """Smart grouping so no duplicates appear."""
         for group in report_groups:
             if group & new_set:
                 group |= new_set
                 return
         report_groups.append(set(new_set))
 
+    # Render duplicate cards
     for md5_hash, group in duplicates.groupby("md5"):
 
         files = set(group["file"].unique())
@@ -229,7 +239,7 @@ if st.button("Run Duplicate Check"):
     st.markdown("</div>", unsafe_allow_html=True)
 
     # ----------------------------------------------------
-    # SUMMARY: SMART GROUPING (correct & non-duplicated)
+    # SUMMARY
     # ----------------------------------------------------
     st.subheader("Reports Containing Duplicate Photos (Grouped by Relation)")
 
@@ -238,16 +248,9 @@ if st.button("Run Duplicate Check"):
         for file in sorted(group):
             st.write(f"• {file}")
 
-from reportlab.lib.pagesizes import letter
-from reportlab.pdfgen import canvas
-from reportlab.lib.utils import ImageReader
-from reportlab.lib.units import inch
-
-# ----------------------------------------------------
-# PDF EXPORT SECTION
-# ----------------------------------------------------
-if duplicates is not None and not duplicates.empty:
-
+    # ----------------------------------------------------
+    # PDF EXPORT BUTTON (NOW SAFE!)
+    # ----------------------------------------------------
     def generate_pdf():
         buffer = io.BytesIO()
         c = canvas.Canvas(buffer, pagesize=letter)
@@ -256,24 +259,22 @@ if duplicates is not None and not duplicates.empty:
         margin = 40
         y = height - margin
 
-        # -------- TITLE --------
+        # TITLE
         c.setFont("Helvetica-Bold", 20)
         c.drawString(margin, y, "Inspection Photo Duplicate Report")
         y -= 40
 
-        # -------- DUPLICATE IMAGES --------
         c.setFont("Helvetica-Bold", 16)
         c.drawString(margin, y, "Duplicate Photo Sets")
         y -= 30
 
         for md5_hash, group in duplicates.groupby("md5"):
 
-            # Header
             c.setFont("Helvetica-Bold", 12)
             c.drawString(margin, y, f"MD5: {md5_hash}")
             y -= 18
 
-            # Thumbnail image
+            # Image
             first_img = group.iloc[0]["image"]
             buf = io.BytesIO()
             first_img.thumbnail((250, 250))
@@ -281,7 +282,6 @@ if duplicates is not None and not duplicates.empty:
             buf.seek(0)
 
             img = ImageReader(buf)
-
             img_width = 2.5 * inch
             img_height = 2.5 * inch
 
@@ -292,19 +292,17 @@ if duplicates is not None and not duplicates.empty:
             c.drawImage(img, margin, y - img_height, width=img_width, height=img_height)
             y -= img_height + 10
 
-            # Text of reports
             c.setFont("Helvetica", 11)
             for _, row in group.iterrows():
                 c.drawString(margin, y, f"• {row['file']} — Page {row['page']}")
                 y -= 14
-
                 if y < margin:
                     c.showPage()
                     y = height - margin
 
             y -= 15
 
-        # -------- SUMMARY SECTION --------
+        # SUMMARY
         c.showPage()
         y = height - margin
 
